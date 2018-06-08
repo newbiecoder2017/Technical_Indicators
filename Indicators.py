@@ -1,111 +1,74 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import pandas_datareader as web
-# import statsmodels.api as sm
-
-def read_csv_save_hdf():
-
-    try:
-
-        dataframe = pd.read_csv("C:/Python27/Examples/Quandl_Daily_Data/WIKI_PRICES.csv", index_col = 'date', parse_dates=True)
-
-        dataframe[['ticker', 'adj_close']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/adj_close.h5", 'table')
-        dataframe[['ticker', 'open']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/open.h5", 'table')
-        dataframe[['ticker', 'high']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/high.h5", 'table')
-        dataframe[['ticker', 'low']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/low.h5", 'table')
-        dataframe[['ticker', 'volume']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/volume.h5", 'table')
-        dataframe[['ticker', 'ex-dividend']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/exdividend.h5", 'table')
-        dataframe[['ticker', 'adj_open']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/adj_open.h5", 'table')
-        dataframe[['ticker', 'adj_high']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/adj_high.h5", 'table')
-        dataframe[['ticker', 'adj_low']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/adj_low.h5", 'table')
-        dataframe[['ticker', 'close']].to_hdf("C:/Python27/Examples/Quandl_Daily_Data/close.h5", 'table')
+import numpy as np
+import fix_yahoo_finance as yf
+from pandas_datareader import data as pdr
+yf.pdr_override() # <== that's all it takes :-)
+from scipy import stats
+import matplotlib.pyplot as plt
+pd.set_option('precision',4)
+pd.options.display.float_format = '{:.3f}'.format
 
 
-    except Exception as e:
-        print ("Error occured in the read_csv_save_hdf() method ", e)
+def pull_data(s):
+    data_df =  pdr.get_data_yahoo(s, start="2000-11-30", end="2018-05-31")
+    return data_df['Open'],data_df['High'], data_df['Low'], data_df['Close'], data_df['Adj Close'], data_df['Volume']
 
+def read_price_file(frq = 'BM', cols=[]):
+    df_price = pd.read_csv("C:/Python27/Git/Technical_Indicators/aclose.csv", index_col='Date', parse_dates=True)
+    df_price = df_price.resample(frq, closed='right').last()
+    df_price = df_price[cols]
+    return df_price
 
+def stock_data_csv(universeList):
+    open_data = []
+    high_data = []
+    low_data = []
+    close_data = []
+    aclose_data = []
+    volume_data = []
 
-def read_adj_prices(px_field):
+    for s in universeList:
+        #request OHLC data from yahoo for the universe
+        print("****************************** " + s + " ************************")
+        dfo, dfh, dfl, dfc, df_ac, dfv = pull_data(s)
+        open_data.append(dfo)
+        high_data.append(dfh)
+        low_data.append(dfl)
+        close_data.append(dfc)
+        aclose_data.append(df_ac)
+        volume_data.append(dfv)
 
-    adj_price_df = pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/"+px_field+".h5", 'table')
+    #concat data for the universe
+    open_data = pd.concat(open_data, axis = 1)
+    high_data = pd.concat(high_data, axis = 1)
+    low_data = pd.concat(low_data, axis = 1)
+    close_data = pd.concat(close_data, axis = 1)
+    aclose_data = pd.concat(aclose_data, axis = 1)
+    volume_data = pd.concat(volume_data, axis = 1)
 
-    adj_price_df['Temp'] = adj_price_df.index
+    # rename columns
+    open_data.columns = universe_list
+    high_data.columns = universe_list
+    low_data.columns = universe_list
+    close_data.columns = universe_list
+    aclose_data.columns = universe_list
+    volume_data.columns = universe_list
 
-    idx  = np.arange(0, len(adj_price_df))
-
-    adj_price_df.set_index(idx)
-
-    pivoted_data = adj_price_df.pivot(index='Temp', columns='ticker', values= px_field)
-
-    adj_price_df.set_index(idx)
-
-    pivoted_data.to_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_"+px_field+".h5", 'table')
-
-    # return pivoted_data
-
-def s_and_p_tickers_check():
-
-    missing_tickers = []
-    sp_data = pd.read_csv("C:/Python27/Examples/S&P 500/sp500Stocks.csv")
-
-    aclose= pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_adj_close.h5", 'table')
-    aopen = pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_adj_open.h5", 'table')
-    alow = pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_adj_low.h5", 'table')
-    ahigh = pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_adj_high.h5", 'table')
-    close = pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_close.h5", 'table')
-    vol = pd.read_hdf("C:/Python27/Examples/Quandl_Daily_Data/clean_volume.h5", 'table')
-
-    sp_ticker = sp_data.Symbol.tolist()
-
-    for i, v in enumerate(sp_ticker):
-        if v == 'BF.B':
-            sp_ticker[i] == 'BF_B'
-        if v == 'BRK.B':
-            sp_ticker[i] = 'BRK_B'
-
-    q_ticker = aclose.columns.tolist()
-
-    for s in sp_ticker:
-
-        if s not in q_ticker:
-            missing_tickers.append(s)
-    print (missing_tickers)
-
-    if len(missing_tickers) ==0:
-
-        aclose = aclose[sp_ticker].fillna(method = 'ffill')
-        aclose.index.names = ['Date']
-        aclose.to_csv("C:/Python27/Examples/S&P 500/aclose.csv")
-
-        aopen = aopen[sp_ticker].fillna(method='ffill')
-        aopen.index.names = ['Date']
-        aopen.to_csv("C:/Python27/Examples/S&P 500/aopen.csv")
-
-        alow = alow[sp_ticker].fillna(method='ffill')
-        alow.index.names = ['Date']
-        alow.to_csv("C:/Python27/Examples/S&P 500/alow.csv")
-
-        ahigh = ahigh[sp_ticker].fillna(method='ffill')
-        ahigh.index.names = ['Date']
-        ahigh.to_csv("C:/Python27/Examples/S&P 500/ahigh.csv")
-
-        close = close[sp_ticker].fillna(method='ffill')
-        close.index.names = ['Date']
-        close.to_csv("C:/Python27/Examples/S&P 500/close.csv")
-
-        vol = vol[sp_ticker].fillna(method='ffill')
-        vol.index.names = ['Date']
-        vol.to_csv("C:/Python27/Examples/S&P 500/volume.csv")
+    #save the dataframes as csv
+    open_data.to_csv("C:/Python27/Git/Technical_Indicators/open.csv")
+    high_data.to_csv("C:/Python27/Git/Technical_Indicators/high.csv")
+    low_data.to_csv("C:/Python27/Git/Technical_Indicators/low.csv")
+    close_data.to_csv("C:/Python27/Git/Technical_Indicators/close.csv")
+    aclose_data.to_csv("C:/Python27/Git/Technical_Indicators/aclose.csv")
+    volume_data.to_csv("C:/Python27/Git/Technical_Indicators/volume.csv")
 
 
 
-def RSI(s, pers = 'B'):
+def RSI(s, window_length):
     ''':param  takes single symbol and calculate sthe RSI'''
 
     # Window length for moving average
-    window_length = 14
+    window_length = window_length
     delta = s.diff()
     # Get rid of the first row, which is NaN since it did not have a previous
     # row to calculate the differences
@@ -134,8 +97,6 @@ def MACD(s, pers = 'B'):
 
     except Exception as e:
         print("Error Occured in MACD method", e)
-
-
 
 def money_flow(window = 5, pers = 'B'):
     try:
@@ -185,7 +146,6 @@ def industry_relative_returns(window = 5, pers = 'B'):
     result_5d.to_csv("C:/Python27/Examples/S&P 500/relative_5d.csv")
     result_4w.to_csv("C:/Python27/Examples/S&P 500/relative_4w.csv")
 
-
 def signal_test(signal_data,returnFrame, counter):
     def mq(x, i):
         # i = args[0]
@@ -208,11 +168,6 @@ def signal_test(signal_data,returnFrame, counter):
     temp = returnFrame[~filtered_frame.isnull()]
     return temp.mean(axis = 1)
 
-
-
-
-
-
 def calculate_indicators(resamp):
     aclose = pd.read_csv("C:/Python27/Examples/S&P 500/aclose.csv", index_col='Date', parse_dates=True)
     # rsi_frame = pd.DataFrame({s: RSI(aclose[s], resamp) for s in aclose.columns}, index=aclose.resample(resamp).last().index)
@@ -230,81 +185,37 @@ def calculate_indicators(resamp):
 
     # industry_relative_returns()
 
-
-
-
+def signal_generation(indicator,slope=2,buy_filter = 50.0, sell_filter=70.0):
+    slope_df = indicator.diff(slope)
+    return indicator
 if __name__ == "__main__":
 
-    pers = "BM"
-    # s_and_p_tickers_check()
-    #  read_csv_save_hdf()
-    # read_adj_prices('adj_close')
-    # read_adj_prices('adj_high')
-    # read_adj_prices('adj_low')
-    # read_adj_prices('adj_open')
-
-    # read_adj_prices('close')
-    # read_adj_prices('volume')
-    # calculate_indicators("B")
-
-    wt_stoch = 0.05
-    wt_macd = -0.10
-    wt_rsi = 0.15
-    wt_4w = -0.15
-    wt_5d = -0.30
-    wt_mflow= -0.25
-
-
-    signal_stoch = pd.read_csv("C:/Python27/Examples/S&P 500/stochastic.csv", index_col='Date', parse_dates=True)
-    signal_stoch = signal_stoch.fillna(method='ffill')
-    signal_stoch = signal_stoch.resample(pers).last()
-
-    signal_macd = pd.read_csv("C:/Python27/Examples/S&P 500/macdsignal.csv", index_col='Date', parse_dates=True)
-    signal_macd = signal_macd.fillna(method='ffill')
-    signal_macd = signal_macd.resample(pers).last()
-
-    signal_mflow = pd.read_csv("C:/Python27/Examples/S&P 500/moneyflow.csv", index_col='Date', parse_dates=True)
-    signal_mflow = signal_mflow.fillna(method='ffill')
-    signal_mflow = signal_mflow.resample(pers).last()
-
-    signal_4wr = pd.read_csv("C:/Python27/Examples/S&P 500/relative_4w.csv", index_col='Date', parse_dates=True)
-    signal_4wr = signal_4wr.fillna(method='ffill')
-    signal_4wr = signal_4wr.resample(pers).last()
+    pers = "W"
+    universe_list = ['SPY']
+    # #pull historical data
+    # stock_data_csv(universe_list)
+    # signal_stoch = pd.read_csv("C:/Python27/Examples/S&P 500/stochastic.csv", index_col='Date', parse_dates=True)
+    # signal_stoch = signal_stoch.fillna(method='ffill')
+    # signal_stoch = signal_stoch.resample(pers).last()
     #
-    signal_5dr = pd.read_csv("C:/Python27/Examples/S&P 500/relative_5d.csv", index_col='Date', parse_dates=True)
-    signal_5dr = signal_5dr.fillna(method='ffill')
-    signal_5dr = signal_5dr.resample(pers).last()
+    # signal_macd = pd.read_csv("C:/Python27/Examples/S&P 500/macdsignal.csv", index_col='Date', parse_dates=True)
+    # signal_macd = signal_macd.fillna(method='ffill')
+    # signal_macd = signal_macd.resample(pers).last()
     #
-    signal_rsi = pd.read_csv("C:/Python27/Examples/S&P 500/rsi.csv", index_col='Date', parse_dates=True)
-    signal_rsi = signal_rsi.fillna(method='ffill')
-    signal_rsi = signal_rsi.resample(pers).last()
-    signal_data = (wt_stoch * signal_stoch) + (wt_macd * signal_macd) +(wt_mflow * signal_mflow) + (wt_4w * signal_4wr) +(wt_5d * signal_5dr) + (wt_rsi * signal_rsi)
-    signal_data.to_csv("C:/Python27/Examples/S&P 500/combo.csv")
-    # signal_data = signal_rsi
-
-
-    signal_data = signal_data['2000':]
-    adjClose = pd.read_csv("C:/Python27/Examples/S&P 500/aclose.csv", index_col='Date', parse_dates=True)
-    returnFrame = adjClose.pct_change()
-    returnFrame.fillna(method='ffill', inplace=True)
-    returnFrame = returnFrame.resample(pers).last()
-    returnFrame = returnFrame['2000':]
-    sig = pd.DataFrame({"Q_"+str(i) : signal_test(signal_data, returnFrame, counter = i) for i in np.arange(0,1,0.1)})
-
-    data = pd.read_csv("C:/Python27/Examples/S&P 500/Return_Data.csv", index_col=['Date'], parse_dates=True)
-    data = data.resample(pers).last()
-    data = data.pct_change()
-
-    sig['BM'] = data['2000':]
-    sig.to_csv("C:/Python27/Examples/S&P 500/bucketReturns.csv")
-
-    print(sig.describe())
-    sig.cumsum().plot()
-    plt.grid()
-    plt.show()
-
-    # delta = sig.subtract(sig['Q_0.9'], axis = 'index' )
-    # dm = delta.mean()
-    # print(dm)
-    # dm.plot(kind = 'bar')
-    # plt.show()
+    # signal_mflow = pd.read_csv("C:/Python27/Examples/S&P 500/moneyflow.csv", index_col='Date', parse_dates=True)
+    # signal_mflow = signal_mflow.fillna(method='ffill')
+    # signal_mflow = signal_mflow.resample(pers).last()
+    #
+    # signal_4wr = pd.read_csv("C:/Python27/Examples/S&P 500/relative_4w.csv", index_col='Date', parse_dates=True)
+    # signal_4wr = signal_4wr.fillna(method='ffill')
+    # signal_4wr = signal_4wr.resample(pers).last()
+    # #
+    # signal_5dr = pd.read_csv("C:/Python27/Examples/S&P 500/relative_5d.csv", index_col='Date', parse_dates=True)
+    # signal_5dr = signal_5dr.fillna(method='ffill')
+    # signal_5dr = signal_5dr.resample(pers).last()
+    price_df = pd.read_csv("C:/Python27/Git/Technical_Indicators/aclose.csv", index_col='Date',parse_dates=True)
+    resample_price = price_df.resample(pers,closed='right').last()
+    print(resample_price.tail())
+    signal_rsi = RSI(resample_price,5)
+    df = signal_generation(signal_rsi,slope=2,buy_filter=30.0,sell_filter=70.0)
+    print(df)
