@@ -62,8 +62,6 @@ def stock_data_csv(universeList):
     aclose_data.to_csv("C:/Python27/Git/Technical_Indicators/aclose.csv")
     volume_data.to_csv("C:/Python27/Git/Technical_Indicators/volume.csv")
 
-
-
 def RSI(s, window_length):
     ''':param  takes single symbol and calculate sthe RSI'''
 
@@ -186,7 +184,33 @@ def calculate_indicators(resamp):
     # industry_relative_returns()
 
 def signal_generation(indicator,slope=2,buy_filter = 50.0, sell_filter=70.0):
+    trade_signal = []
+    is_buy = 0
+    is_sell=0
+    is_hold = 0
+    indicator.iloc[0]=0.0
     slope_df = indicator.diff(slope)
+    slope_df.loc[0:2] = -1
+    for rows in indicator.iterrows():
+        ind_val = rows[1].values[0]
+        if ((is_buy==0) & (ind_val<=buy_filter) & (slope_df.loc[rows[0]][0]>=0.0)):
+            trade_signal.append(1)
+            is_buy= 1
+            is_sell=0
+
+        elif ((is_buy==1) & (ind_val>= sell_filter) & (slope_df.loc[rows[0]][0] <0.0)):
+            trade_signal.append(-1)
+            is_buy=0
+            is_sell=1
+
+        elif ((is_buy==1)&(is_sell==0)):
+            trade_signal.append(1)
+        else:
+            trade_signal.append(0)
+    signal_frame = pd.DataFrame(trade_signal, index=indicator.index)
+    return signal_frame, slope_df
+
+
     return indicator
 if __name__ == "__main__":
 
@@ -215,7 +239,14 @@ if __name__ == "__main__":
     # signal_5dr = signal_5dr.resample(pers).last()
     price_df = pd.read_csv("C:/Python27/Git/Technical_Indicators/aclose.csv", index_col='Date',parse_dates=True)
     resample_price = price_df.resample(pers,closed='right').last()
-    print(resample_price.tail())
-    signal_rsi = RSI(resample_price,5)
-    df = signal_generation(signal_rsi,slope=2,buy_filter=30.0,sell_filter=70.0)
-    print(df)
+    signal_rsi = RSI(resample_price,4)
+    signal_rsi['Signal'],signal_rsi['Slope'] = signal_generation(signal_rsi,slope=1,buy_filter=40.0,sell_filter=90.0)
+
+    signal_rsi['Returns'] = resample_price.pct_change()
+    signal_rsi['PortReturn'] = signal_rsi['Signal']*(signal_rsi['Returns'].shift(-1))
+    # print(signal_rsi.head(50))
+    signal_rsi[['Returns','PortReturn']].cumsum().plot()
+    plt.show()
+    print(signal_rsi[['Returns', 'PortReturn']].describe())
+    print(signal_rsi[['Returns','PortReturn']].groupby(signal_rsi.index.year).mean())
+
